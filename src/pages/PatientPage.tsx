@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageCircle, Mic, MicOff, Send, Upload, Image as ImageIcon, X } from 'lucide-react';
+import { MessageCircle, Mic, MicOff, Send, Upload, Image as ImageIcon, X, Settings, Bot } from 'lucide-react';
 import Header from '../components/Layout/Header';
 import Footer from '../components/Layout/Footer';
+import LLMConfigModal from '../components/LLMConfig/LLMConfigModal';
+import { llmService } from '../services/llmService';
 
 interface ChatMessage {
   id: number;
@@ -19,13 +21,29 @@ const PatientPage: React.FC = () => {
     {
       id: 1,
       type: 'ai',
-      message: "Hello! I'm your AI health assistant. Please describe your symptoms and I'll help analyze them. You can type, speak, or upload images to help me understand your condition better.",
+      message: "Hello! I'm Dr. Ava, your empathetic virtual health assistant. I'm here to help you understand your symptoms and guide you toward the best care. Please describe what you're experiencing, and I'll provide personalized guidance. You can type, speak, or upload images to help me understand your condition better.",
       timestamp: new Date()
     }
   ]);
   const [isTyping, setIsTyping] = useState(false);
+  const [showLLMConfig, setShowLLMConfig] = useState(false);
+  const [isLLMConfigured, setIsLLMConfigured] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    // Check if LLM is already configured
+    const storedConfig = localStorage.getItem('llm_config');
+    if (storedConfig) {
+      try {
+        const config = JSON.parse(storedConfig);
+        llmService.configure(config);
+        setIsLLMConfigured(llmService.isReady());
+      } catch (error) {
+        console.error('Failed to load stored LLM config:', error);
+      }
+    }
+  }, []);
 
   const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -47,18 +65,7 @@ const PatientPage: React.FC = () => {
     setUploadedImages(prev => prev.filter((_, i) => i !== index));
   };
 
-  const simulateAIResponse = (userMessage: string, hasImages: boolean) => {
-    const responses = [
-      "Thank you for describing your symptoms. Based on what you've shared, I'd like to ask a few follow-up questions to better understand your condition.",
-      "I understand your concerns. These symptoms could be related to several conditions. Can you tell me when these symptoms first started?",
-      "Based on your description, I recommend monitoring these symptoms closely. If they persist or worsen, please consider scheduling a consultation with one of our doctors.",
-      hasImages ? "I can see the images you've shared. This additional visual information helps me better understand your condition. I recommend discussing these findings with a healthcare provider." : "Your symptoms suggest you should seek medical attention. Would you like me to help you schedule a consultation with one of our available doctors?"
-    ];
-    
-    return responses[Math.floor(Math.random() * responses.length)];
-  };
-
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!symptomInput.trim() && uploadedImages.length === 0) return;
 
     const newMessage: ChatMessage = {
@@ -72,17 +79,37 @@ const PatientPage: React.FC = () => {
     setChatMessages(prev => [...prev, newMessage]);
     setIsTyping(true);
 
-    // Simulate AI processing time
-    setTimeout(() => {
-      const aiResponse: ChatMessage = {
+    try {
+      let aiResponse: string;
+      
+      if (isLLMConfigured) {
+        // Use Dr. Ava LLM service
+        aiResponse = await llmService.generateResponse(symptomInput, uploadedImages.length > 0);
+      } else {
+        // Fallback response
+        aiResponse = "I'd love to provide you with personalized medical guidance, but I need to be configured first. Please click the settings button to set up my connection to provide you with the best possible care.";
+      }
+
+      const aiMessage: ChatMessage = {
         id: chatMessages.length + 2,
         type: 'ai',
-        message: simulateAIResponse(symptomInput, uploadedImages.length > 0),
+        message: aiResponse,
         timestamp: new Date()
       };
-      setChatMessages(prev => [...prev, aiResponse]);
+
+      setChatMessages(prev => [...prev, aiMessage]);
+    } catch (error) {
+      console.error('Error generating AI response:', error);
+      const errorMessage: ChatMessage = {
+        id: chatMessages.length + 2,
+        type: 'ai',
+        message: "I apologize, but I'm having trouble processing your request right now. Please try again in a moment, or consider speaking with one of our human healthcare providers.",
+        timestamp: new Date()
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+    } finally {
       setIsTyping(false);
-    }, 1500 + Math.random() * 1000);
+    }
 
     setSymptomInput('');
     setUploadedImages([]);
@@ -125,14 +152,41 @@ const PatientPage: React.FC = () => {
     }
   };
 
+  const handleLLMConfigured = () => {
+    setIsLLMConfigured(true);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Header />
       
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">AI Health Assistant</h1>
-          <p className="text-gray-600">Describe your symptoms using text, voice, or images for personalized health guidance</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2 flex items-center">
+                <Bot className="w-8 h-8 mr-3 text-medical-500" />
+                Dr. Ava - AI Health Assistant
+              </h1>
+              <p className="text-gray-600">Powered by AWS Bedrock Claude Haiku for empathetic, personalized health guidance</p>
+            </div>
+            <div className="flex items-center space-x-3">
+              <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                isLLMConfigured 
+                  ? 'bg-green-100 text-green-800' 
+                  : 'bg-yellow-100 text-yellow-800'
+              }`}>
+                {isLLMConfigured ? 'Dr. Ava Ready' : 'Configuration Needed'}
+              </div>
+              <button
+                onClick={() => setShowLLMConfig(true)}
+                className="p-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition-colors"
+                title="Configure LLM Settings"
+              >
+                <Settings className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
         </div>
 
         <div className="grid lg:grid-cols-4 gap-8">
@@ -142,7 +196,12 @@ const PatientPage: React.FC = () => {
               <div className="p-6 border-b border-gray-200">
                 <h2 className="text-xl font-semibold text-gray-900 flex items-center">
                   <MessageCircle className="w-5 h-5 mr-2 text-medical-500" />
-                  Chat with AI Assistant
+                  Chat with Dr. Ava
+                  {isLLMConfigured && (
+                    <span className="ml-3 px-2 py-1 bg-medical-100 text-medical-700 text-xs rounded-full">
+                      Claude Haiku Powered
+                    </span>
+                  )}
                 </h2>
               </div>
 
@@ -160,6 +219,13 @@ const PatientPage: React.FC = () => {
                           : 'bg-gray-100 text-gray-900'
                       }`}
                     >
+                      {message.type === 'ai' && (
+                        <div className="flex items-center mb-2">
+                          <Bot className="w-4 h-4 mr-2 text-medical-500" />
+                          <span className="text-xs font-medium text-medical-600">Dr. Ava</span>
+                        </div>
+                      )}
+                      
                       <p className="text-sm whitespace-pre-wrap">{message.message}</p>
                       
                       {/* Display images if present */}
@@ -189,7 +255,11 @@ const PatientPage: React.FC = () => {
                 {isTyping && (
                   <div className="flex justify-start">
                     <div className="bg-gray-100 text-gray-900 px-4 py-3 rounded-2xl">
-                      <div className="flex space-x-1">
+                      <div className="flex items-center space-x-2">
+                        <Bot className="w-4 h-4 text-medical-500" />
+                        <span className="text-xs font-medium text-medical-600">Dr. Ava is thinking...</span>
+                      </div>
+                      <div className="flex space-x-1 mt-2">
                         <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse"></div>
                         <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
                         <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
@@ -235,7 +305,7 @@ const PatientPage: React.FC = () => {
                     <textarea
                       value={symptomInput}
                       onChange={(e) => setSymptomInput(e.target.value)}
-                      placeholder="Describe your symptoms in detail..."
+                      placeholder="Describe your symptoms in detail to Dr. Ava..."
                       className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-medical-500 focus:border-transparent resize-none"
                       rows={3}
                       onKeyPress={(e) => {
@@ -289,6 +359,35 @@ const PatientPage: React.FC = () => {
 
           {/* Sidebar */}
           <div className="space-y-6">
+            {/* Dr. Ava Info */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                <Bot className="w-5 h-5 mr-2 text-medical-500" />
+                About Dr. Ava
+              </h3>
+              <div className="space-y-3 text-sm text-gray-600">
+                <p>Dr. Ava is powered by AWS Bedrock Claude Haiku, providing:</p>
+                <div className="space-y-2">
+                  <div className="flex items-start space-x-2">
+                    <div className="w-2 h-2 bg-medical-500 rounded-full mt-2 flex-shrink-0"></div>
+                    <p>Empathetic, personalized responses</p>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <div className="w-2 h-2 bg-medical-500 rounded-full mt-2 flex-shrink-0"></div>
+                    <p>Plain-language medical guidance</p>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <div className="w-2 h-2 bg-medical-500 rounded-full mt-2 flex-shrink-0"></div>
+                    <p>Responsible escalation recommendations</p>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <div className="w-2 h-2 bg-medical-500 rounded-full mt-2 flex-shrink-0"></div>
+                    <p>Image analysis capabilities</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Chat History */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Conversations</h3>
@@ -346,6 +445,12 @@ const PatientPage: React.FC = () => {
       </main>
 
       <Footer />
+      
+      <LLMConfigModal
+        isOpen={showLLMConfig}
+        onClose={() => setShowLLMConfig(false)}
+        onConfigured={handleLLMConfigured}
+      />
     </div>
   );
 };
