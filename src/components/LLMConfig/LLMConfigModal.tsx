@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Key, Globe, Lock } from 'lucide-react';
+import { X, Key, Globe, Lock, CheckCircle, AlertCircle } from 'lucide-react';
 import { llmService } from '../../services/llmService';
 
 interface LLMConfigModalProps {
@@ -10,17 +10,19 @@ interface LLMConfigModalProps {
 
 const LLMConfigModal: React.FC<LLMConfigModalProps> = ({ isOpen, onClose, onConfigured }) => {
   const [config, setConfig] = useState({
-    region: 'us-east-1',
-    accessKeyId: '',
-    secretAccessKey: ''
+    region: import.meta.env.VITE_AWS_REGION || 'us-east-1',
+    accessKeyId: import.meta.env.VITE_AWS_ACCESS_KEY_ID || '',
+    secretAccessKey: import.meta.env.VITE_AWS_SECRET_ACCESS_KEY || ''
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
+    setSuccess('');
 
     try {
       llmService.configure(config);
@@ -31,10 +33,14 @@ const LLMConfigModal: React.FC<LLMConfigModalProps> = ({ isOpen, onClose, onConf
       // Store configuration in localStorage (in production, use secure storage)
       localStorage.setItem('llm_config', JSON.stringify(config));
       
-      onConfigured();
-      onClose();
+      setSuccess('Dr. Ava is now ready to help patients!');
+      
+      setTimeout(() => {
+        onConfigured();
+        onClose();
+      }, 1500);
     } catch (err) {
-      setError('Failed to configure LLM service. Please check your credentials.');
+      setError('Failed to configure Dr. Ava. Please check your AWS credentials and ensure Bedrock access is enabled.');
     } finally {
       setIsLoading(false);
     }
@@ -43,6 +49,12 @@ const LLMConfigModal: React.FC<LLMConfigModalProps> = ({ isOpen, onClose, onConf
   const handleInputChange = (field: string, value: string) => {
     setConfig(prev => ({ ...prev, [field]: value }));
     setError('');
+    setSuccess('');
+  };
+
+  const isEnvConfigured = () => {
+    const envKey = import.meta.env.VITE_AWS_ACCESS_KEY_ID;
+    return envKey && envKey !== 'your_aws_access_key_here';
   };
 
   if (!isOpen) return null;
@@ -51,7 +63,7 @@ const LLMConfigModal: React.FC<LLMConfigModalProps> = ({ isOpen, onClose, onConf
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold text-gray-900">Configure AWS Bedrock</h2>
+          <h2 className="text-xl font-semibold text-gray-900">Configure Dr. Ava</h2>
           <button
             onClick={onClose}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -59,6 +71,17 @@ const LLMConfigModal: React.FC<LLMConfigModalProps> = ({ isOpen, onClose, onConf
             <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
+
+        {isEnvConfigured() && (
+          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+            <div className="flex items-center">
+              <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
+              <p className="text-sm text-green-700">
+                AWS credentials detected from environment variables
+              </p>
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -75,6 +98,7 @@ const LLMConfigModal: React.FC<LLMConfigModalProps> = ({ isOpen, onClose, onConf
               <option value="us-west-2">US West (Oregon)</option>
               <option value="eu-west-1">Europe (Ireland)</option>
               <option value="ap-southeast-1">Asia Pacific (Singapore)</option>
+              <option value="ap-northeast-1">Asia Pacific (Tokyo)</option>
             </select>
           </div>
 
@@ -110,13 +134,26 @@ const LLMConfigModal: React.FC<LLMConfigModalProps> = ({ isOpen, onClose, onConf
 
           {error && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-600">{error}</p>
+              <div className="flex items-start">
+                <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 mr-2 flex-shrink-0" />
+                <p className="text-sm text-red-600">{error}</p>
+              </div>
+            </div>
+          )}
+
+          {success && (
+            <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-center">
+                <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
+                <p className="text-sm text-green-600">{success}</p>
+              </div>
             </div>
           )}
 
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
             <p className="text-xs text-blue-700">
-              <strong>Note:</strong> Your AWS credentials are stored locally and used only to connect to Bedrock Claude Haiku for Dr. Ava responses.
+              <strong>Required:</strong> AWS account with Bedrock access and Claude Haiku model enabled. 
+              Your credentials are stored locally and used only for Dr. Ava's AI responses.
             </p>
           </div>
 
@@ -130,10 +167,10 @@ const LLMConfigModal: React.FC<LLMConfigModalProps> = ({ isOpen, onClose, onConf
             </button>
             <button
               type="submit"
-              disabled={isLoading || !config.accessKeyId || !config.secretAccessKey}
+              disabled={isLoading || (!config.accessKeyId || !config.secretAccessKey)}
               className="flex-1 py-2 px-4 bg-medical-500 hover:bg-medical-600 disabled:bg-gray-300 text-white rounded-lg transition-colors"
             >
-              {isLoading ? 'Testing...' : 'Configure'}
+              {isLoading ? 'Testing...' : 'Configure Dr. Ava'}
             </button>
           </div>
         </form>

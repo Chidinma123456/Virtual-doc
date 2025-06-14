@@ -4,11 +4,35 @@ interface LLMConfig {
   region: string;
   accessKeyId: string;
   secretAccessKey: string;
+  modelId?: string;
 }
 
 class LLMService {
   private client: BedrockRuntimeClient | null = null;
   private isConfigured = false;
+  private modelId: string;
+
+  constructor() {
+    this.modelId = import.meta.env.VITE_BEDROCK_MODEL_ID || 'anthropic.claude-3-haiku-20240307-v1:0';
+    this.initializeFromEnv();
+  }
+
+  private initializeFromEnv() {
+    const region = import.meta.env.VITE_AWS_REGION;
+    const accessKeyId = import.meta.env.VITE_AWS_ACCESS_KEY_ID;
+    const secretAccessKey = import.meta.env.VITE_AWS_SECRET_ACCESS_KEY;
+
+    if (region && accessKeyId && secretAccessKey && 
+        accessKeyId !== 'your_aws_access_key_here' && 
+        secretAccessKey !== 'your_aws_secret_key_here') {
+      this.configure({
+        region,
+        accessKeyId,
+        secretAccessKey,
+        modelId: this.modelId
+      });
+    }
+  }
 
   configure(config: LLMConfig) {
     try {
@@ -19,9 +43,18 @@ class LLMService {
           secretAccessKey: config.secretAccessKey,
         },
       });
+      
+      if (config.modelId) {
+        this.modelId = config.modelId;
+      }
+      
       this.isConfigured = true;
+      
+      if (import.meta.env.VITE_DEBUG_MODE === 'true') {
+        console.log('✅ LLM Service configured successfully');
+      }
     } catch (error) {
-      console.error('Failed to configure LLM service:', error);
+      console.error('❌ Failed to configure LLM service:', error);
       this.isConfigured = false;
     }
   }
@@ -42,7 +75,7 @@ Patient message: ${userMessage}${hasImages ? '\n\nNote: Patient has shared medic
 
     try {
       const command = new InvokeModelCommand({
-        modelId: 'anthropic.claude-3-haiku-20240307-v1:0',
+        modelId: this.modelId,
         contentType: 'application/json',
         accept: 'application/json',
         body: JSON.stringify({
@@ -60,9 +93,13 @@ Patient message: ${userMessage}${hasImages ? '\n\nNote: Patient has shared medic
       const response = await this.client.send(command);
       const responseBody = JSON.parse(new TextDecoder().decode(response.body));
       
+      if (import.meta.env.VITE_DEBUG_MODE === 'true') {
+        console.log('🤖 Dr. Ava response generated successfully');
+      }
+      
       return responseBody.content[0].text || this.getFallbackResponse(userMessage, hasImages);
     } catch (error) {
-      console.error('LLM API error:', error);
+      console.error('❌ LLM API error:', error);
       return this.getFallbackResponse(userMessage, hasImages);
     }
   }
@@ -83,6 +120,14 @@ Patient message: ${userMessage}${hasImages ? '\n\nNote: Patient has shared medic
 
   isReady(): boolean {
     return this.isConfigured;
+  }
+
+  getConfiguration(): { region: string; hasCredentials: boolean; modelId: string } {
+    return {
+      region: import.meta.env.VITE_AWS_REGION || 'us-east-1',
+      hasCredentials: this.isConfigured,
+      modelId: this.modelId
+    };
   }
 }
 
