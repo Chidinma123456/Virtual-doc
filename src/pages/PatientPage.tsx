@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageCircle, Mic, MicOff, Send, Upload, Image as ImageIcon, X, Settings, Bot } from 'lucide-react';
+import { MessageCircle, Mic, MicOff, Send, Upload, Image as ImageIcon, X, Settings, Bot, AlertTriangle } from 'lucide-react';
 import Header from '../components/Layout/Header';
 import Footer from '../components/Layout/Footer';
 import LLMConfigModal from '../components/LLMConfig/LLMConfigModal';
@@ -28,20 +28,24 @@ const PatientPage: React.FC = () => {
   const [isTyping, setIsTyping] = useState(false);
   const [showLLMConfig, setShowLLMConfig] = useState(false);
   const [isLLMConfigured, setIsLLMConfigured] = useState(false);
+  const [configStatus, setConfigStatus] = useState<any>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // Check if LLM is already configured
-    const storedConfig = localStorage.getItem('llm_config');
-    if (storedConfig) {
-      try {
-        const config = JSON.parse(storedConfig);
-        llmService.configure(config);
+    // Check configuration status
+    const status = llmService.getConfiguration();
+    setConfigStatus(status);
+    setIsLLMConfigured(llmService.isReady());
+
+    // If not configured but env vars are available, show a helpful message
+    if (!llmService.isReady() && status.envConfigured) {
+      // Try to auto-configure
+      setTimeout(() => {
+        const newStatus = llmService.getConfiguration();
         setIsLLMConfigured(llmService.isReady());
-      } catch (error) {
-        console.error('Failed to load stored LLM config:', error);
-      }
+        setConfigStatus(newStatus);
+      }, 1000);
     }
   }, []);
 
@@ -86,8 +90,10 @@ const PatientPage: React.FC = () => {
         // Use Dr. Ava LLM service
         aiResponse = await llmService.generateResponse(symptomInput, uploadedImages.length > 0);
       } else {
-        // Fallback response
-        aiResponse = "I'd love to provide you with personalized medical guidance, but I need to be configured first. Please click the settings button to set up my connection to provide you with the best possible care.";
+        // Provide configuration guidance
+        aiResponse = configStatus?.envConfigured 
+          ? "I can see your AWS credentials are configured, but I need to be properly initialized. Please click the settings button (⚙️) to complete my setup so I can provide you with personalized medical guidance."
+          : "I'd love to provide you with personalized medical guidance, but I need to be configured first. Please click the settings button (⚙️) to set up my connection to AWS Bedrock so I can help you with the best possible care.";
       }
 
       const aiMessage: ChatMessage = {
@@ -103,7 +109,7 @@ const PatientPage: React.FC = () => {
       const errorMessage: ChatMessage = {
         id: chatMessages.length + 2,
         type: 'ai',
-        message: "I apologize, but I'm having trouble processing your request right now. Please try again in a moment, or consider speaking with one of our human healthcare providers.",
+        message: "I apologize, but I'm having trouble processing your request right now. This might be due to a configuration issue. Please try clicking the settings button (⚙️) to check my configuration, or try again in a moment.",
         timestamp: new Date()
       };
       setChatMessages(prev => [...prev, errorMessage]);
@@ -154,7 +160,30 @@ const PatientPage: React.FC = () => {
 
   const handleLLMConfigured = () => {
     setIsLLMConfigured(true);
+    const status = llmService.getConfiguration();
+    setConfigStatus(status);
+    
+    // Add a welcome message from Dr. Ava
+    const welcomeMessage: ChatMessage = {
+      id: chatMessages.length + 1,
+      type: 'ai',
+      message: "Perfect! I'm now fully configured and ready to help you with your health concerns. My AI is powered by AWS Bedrock Claude Haiku, which allows me to provide empathetic, personalized medical guidance. How can I assist you today?",
+      timestamp: new Date()
+    };
+    setChatMessages(prev => [...prev, welcomeMessage]);
   };
+
+  const getStatusDisplay = () => {
+    if (isLLMConfigured) {
+      return { text: 'Dr. Ava Ready', color: 'bg-green-100 text-green-800' };
+    } else if (configStatus?.envConfigured) {
+      return { text: 'Setup Required', color: 'bg-yellow-100 text-yellow-800' };
+    } else {
+      return { text: 'Configuration Needed', color: 'bg-red-100 text-red-800' };
+    }
+  };
+
+  const status = getStatusDisplay();
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -171,22 +200,40 @@ const PatientPage: React.FC = () => {
               <p className="text-gray-600">Powered by AWS Bedrock Claude Haiku for empathetic, personalized health guidance</p>
             </div>
             <div className="flex items-center space-x-3">
-              <div className={`px-3 py-1 rounded-full text-sm font-medium ${
-                isLLMConfigured 
-                  ? 'bg-green-100 text-green-800' 
-                  : 'bg-yellow-100 text-yellow-800'
-              }`}>
-                {isLLMConfigured ? 'Dr. Ava Ready' : 'Configuration Needed'}
+              <div className={`px-3 py-1 rounded-full text-sm font-medium ${status.color}`}>
+                {status.text}
               </div>
               <button
                 onClick={() => setShowLLMConfig(true)}
-                className="p-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition-colors"
+                className={`p-2 rounded-lg transition-colors ${
+                  isLLMConfigured 
+                    ? 'bg-gray-100 hover:bg-gray-200 text-gray-600' 
+                    : 'bg-red-100 hover:bg-red-200 text-red-600 animate-pulse'
+                }`}
                 title="Configure LLM Settings"
               >
                 <Settings className="w-5 h-5" />
               </button>
             </div>
           </div>
+          
+          {/* Configuration Alert */}
+          {!isLLMConfigured && (
+            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-start">
+                <AlertTriangle className="w-5 h-5 text-blue-600 mt-0.5 mr-3 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-blue-800">Dr. Ava needs configuration</p>
+                  <p className="text-sm text-blue-700 mt-1">
+                    {configStatus?.envConfigured 
+                      ? "Your AWS credentials are detected but Dr. Ava needs to be initialized. Click the settings button to complete setup."
+                      : "To provide personalized medical guidance, Dr. Ava needs AWS Bedrock access. Click the settings button to configure your credentials."
+                    }
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="grid lg:grid-cols-4 gap-8">

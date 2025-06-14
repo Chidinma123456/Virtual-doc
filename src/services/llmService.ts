@@ -22,15 +22,33 @@ class LLMService {
     const accessKeyId = import.meta.env.VITE_AWS_ACCESS_KEY_ID;
     const secretAccessKey = import.meta.env.VITE_AWS_SECRET_ACCESS_KEY;
 
+    if (import.meta.env.VITE_DEBUG_MODE === 'true') {
+      console.log('🔍 Checking environment variables:');
+      console.log('- Region:', region ? '✅ Set' : '❌ Missing');
+      console.log('- Access Key:', accessKeyId ? '✅ Set' : '❌ Missing');
+      console.log('- Secret Key:', secretAccessKey ? '✅ Set' : '❌ Missing');
+    }
+
     if (region && accessKeyId && secretAccessKey && 
         accessKeyId !== 'your_aws_access_key_here' && 
-        secretAccessKey !== 'your_aws_secret_key_here') {
+        secretAccessKey !== 'your_aws_secret_key_here' &&
+        accessKeyId.length > 10 && 
+        secretAccessKey.length > 10) {
+      
       this.configure({
         region,
         accessKeyId,
         secretAccessKey,
         modelId: this.modelId
       });
+
+      if (import.meta.env.VITE_DEBUG_MODE === 'true') {
+        console.log('✅ Auto-configured from environment variables');
+      }
+    } else {
+      if (import.meta.env.VITE_DEBUG_MODE === 'true') {
+        console.log('⚠️ Environment variables not properly set, manual configuration required');
+      }
     }
   }
 
@@ -52,6 +70,8 @@ class LLMService {
       
       if (import.meta.env.VITE_DEBUG_MODE === 'true') {
         console.log('✅ LLM Service configured successfully');
+        console.log('- Region:', config.region);
+        console.log('- Model:', this.modelId);
       }
     } catch (error) {
       console.error('❌ Failed to configure LLM service:', error);
@@ -65,11 +85,12 @@ class LLMService {
     }
 
     const drAvaPrompt = `You are Dr. Ava, an empathetic virtual health assistant. When a patient shares their symptoms, respond with:
-- A friendly greeting
-- A plain-language possible diagnosis
-- Next steps (self-care or escalation to doctor)
+- A friendly greeting addressing them personally
+- A plain-language possible diagnosis or explanation
+- Next steps (self-care recommendations or escalation to doctor)
+- Reassurance and support
 
-Keep responses concise, caring, and medically responsible. Always recommend seeing a doctor for serious symptoms.
+Keep responses concise (under 200 words), caring, and medically responsible. Always recommend seeing a doctor for serious symptoms.
 
 Patient message: ${userMessage}${hasImages ? '\n\nNote: Patient has shared medical images for reference.' : ''}`;
 
@@ -100,6 +121,14 @@ Patient message: ${userMessage}${hasImages ? '\n\nNote: Patient has shared medic
       return responseBody.content[0].text || this.getFallbackResponse(userMessage, hasImages);
     } catch (error) {
       console.error('❌ LLM API error:', error);
+      
+      // Provide more specific error messages
+      if (error.message?.includes('UnauthorizedOperation') || error.message?.includes('AccessDenied')) {
+        return "I apologize, but I'm having trouble accessing my medical knowledge base due to authentication issues. Please ensure your AWS credentials have the necessary permissions for Bedrock access, or contact support for assistance.";
+      } else if (error.message?.includes('ModelNotFound')) {
+        return "I'm sorry, but the AI model I rely on isn't available right now. Please try again later or speak with one of our human healthcare providers.";
+      }
+      
       return this.getFallbackResponse(userMessage, hasImages);
     }
   }
@@ -122,11 +151,20 @@ Patient message: ${userMessage}${hasImages ? '\n\nNote: Patient has shared medic
     return this.isConfigured;
   }
 
-  getConfiguration(): { region: string; hasCredentials: boolean; modelId: string } {
+  getConfiguration(): { region: string; hasCredentials: boolean; modelId: string; envConfigured: boolean } {
+    const envConfigured = !!(
+      import.meta.env.VITE_AWS_REGION &&
+      import.meta.env.VITE_AWS_ACCESS_KEY_ID &&
+      import.meta.env.VITE_AWS_SECRET_ACCESS_KEY &&
+      import.meta.env.VITE_AWS_ACCESS_KEY_ID !== 'your_aws_access_key_here' &&
+      import.meta.env.VITE_AWS_SECRET_ACCESS_KEY !== 'your_aws_secret_key_here'
+    );
+
     return {
       region: import.meta.env.VITE_AWS_REGION || 'us-east-1',
       hasCredentials: this.isConfigured,
-      modelId: this.modelId
+      modelId: this.modelId,
+      envConfigured
     };
   }
 }

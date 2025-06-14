@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, Key, Globe, Lock, CheckCircle, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Key, Globe, Lock, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
 import { llmService } from '../../services/llmService';
 
 interface LLMConfigModalProps {
@@ -17,6 +17,19 @@ const LLMConfigModal: React.FC<LLMConfigModalProps> = ({ isOpen, onClose, onConf
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [envStatus, setEnvStatus] = useState<any>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      const status = llmService.getConfiguration();
+      setEnvStatus(status);
+      
+      // If already configured from env, show success
+      if (status.envConfigured && status.hasCredentials) {
+        setSuccess('Dr. Ava is already configured from your environment variables!');
+      }
+    }
+  }, [isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,7 +41,11 @@ const LLMConfigModal: React.FC<LLMConfigModalProps> = ({ isOpen, onClose, onConf
       llmService.configure(config);
       
       // Test the configuration with a simple request
-      await llmService.generateResponse('Hello, this is a test message.');
+      const testResponse = await llmService.generateResponse('Hello, this is a test message.');
+      
+      if (testResponse.includes('authentication') || testResponse.includes('credentials')) {
+        throw new Error('Authentication failed');
+      }
       
       // Store configuration in localStorage (in production, use secure storage)
       localStorage.setItem('llm_config', JSON.stringify(config));
@@ -39,8 +56,15 @@ const LLMConfigModal: React.FC<LLMConfigModalProps> = ({ isOpen, onClose, onConf
         onConfigured();
         onClose();
       }, 1500);
-    } catch (err) {
-      setError('Failed to configure Dr. Ava. Please check your AWS credentials and ensure Bedrock access is enabled.');
+    } catch (err: any) {
+      console.error('Configuration error:', err);
+      if (err.message?.includes('Authentication') || err.message?.includes('AccessDenied')) {
+        setError('Authentication failed. Please check your AWS credentials and ensure Bedrock access is enabled in your AWS account.');
+      } else if (err.message?.includes('Region')) {
+        setError('Invalid region or Bedrock not available in this region. Please try a different region.');
+      } else {
+        setError('Failed to configure Dr. Ava. Please check your AWS credentials and ensure Bedrock access is enabled.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -52,16 +76,25 @@ const LLMConfigModal: React.FC<LLMConfigModalProps> = ({ isOpen, onClose, onConf
     setSuccess('');
   };
 
+  const handleUseEnvVars = () => {
+    setConfig({
+      region: import.meta.env.VITE_AWS_REGION || 'us-east-1',
+      accessKeyId: import.meta.env.VITE_AWS_ACCESS_KEY_ID || '',
+      secretAccessKey: import.meta.env.VITE_AWS_SECRET_ACCESS_KEY || ''
+    });
+    setError('');
+    setSuccess('');
+  };
+
   const isEnvConfigured = () => {
-    const envKey = import.meta.env.VITE_AWS_ACCESS_KEY_ID;
-    return envKey && envKey !== 'your_aws_access_key_here';
+    return envStatus?.envConfigured;
   };
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-semibold text-gray-900">Configure Dr. Ava</h2>
           <button
@@ -72,16 +105,36 @@ const LLMConfigModal: React.FC<LLMConfigModalProps> = ({ isOpen, onClose, onConf
           </button>
         </div>
 
-        {isEnvConfigured() && (
-          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-            <div className="flex items-center">
-              <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
-              <p className="text-sm text-green-700">
-                AWS credentials detected from environment variables
-              </p>
+        {/* Environment Status */}
+        <div className="mb-4">
+          {isEnvConfigured() ? (
+            <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
+                  <p className="text-sm text-green-700">
+                    AWS credentials detected from .env file
+                  </p>
+                </div>
+                <button
+                  onClick={handleUseEnvVars}
+                  className="text-xs bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded"
+                >
+                  Use These
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <div className="flex items-center">
+                <AlertCircle className="w-5 h-5 text-yellow-600 mr-2" />
+                <p className="text-sm text-yellow-700">
+                  No valid AWS credentials found in environment variables
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -151,10 +204,17 @@ const LLMConfigModal: React.FC<LLMConfigModalProps> = ({ isOpen, onClose, onConf
           )}
 
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <p className="text-xs text-blue-700">
-              <strong>Required:</strong> AWS account with Bedrock access and Claude Haiku model enabled. 
-              Your credentials are stored locally and used only for Dr. Ava's AI responses.
+            <p className="text-xs text-blue-700 mb-2">
+              <strong>Required:</strong> AWS account with Bedrock access and Claude Haiku model enabled.
             </p>
+            <p className="text-xs text-blue-600">
+              💡 <strong>Tip:</strong> Add your credentials to the .env file for automatic configuration:
+            </p>
+            <div className="mt-2 p-2 bg-blue-100 rounded text-xs font-mono text-blue-800">
+              VITE_AWS_REGION=us-east-1<br/>
+              VITE_AWS_ACCESS_KEY_ID=your_key<br/>
+              VITE_AWS_SECRET_ACCESS_KEY=your_secret
+            </div>
           </div>
 
           <div className="flex space-x-3 pt-4">
@@ -168,9 +228,16 @@ const LLMConfigModal: React.FC<LLMConfigModalProps> = ({ isOpen, onClose, onConf
             <button
               type="submit"
               disabled={isLoading || (!config.accessKeyId || !config.secretAccessKey)}
-              className="flex-1 py-2 px-4 bg-medical-500 hover:bg-medical-600 disabled:bg-gray-300 text-white rounded-lg transition-colors"
+              className="flex-1 py-2 px-4 bg-medical-500 hover:bg-medical-600 disabled:bg-gray-300 text-white rounded-lg transition-colors flex items-center justify-center"
             >
-              {isLoading ? 'Testing...' : 'Configure Dr. Ava'}
+              {isLoading ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  Testing...
+                </>
+              ) : (
+                'Configure Dr. Ava'
+              )}
             </button>
           </div>
         </form>
