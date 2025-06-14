@@ -1,46 +1,107 @@
 import React, { useState } from 'react';
-import { Video, FileText, Clock, AlertCircle, CheckCircle, Users, Calendar } from 'lucide-react';
+import { FileText, AlertTriangle, CheckCircle, Clock, Eye, Video, User, Activity } from 'lucide-react';
 import Header from '../components/Layout/Header';
 import Footer from '../components/Layout/Footer';
 
+interface CaseData {
+  id: string;
+  patientName: string;
+  age: number;
+  mrn: string;
+  summary: string;
+  urgency: 'low' | 'medium' | 'high' | 'critical';
+  aiAnalysis: string;
+  vitals?: {
+    heartRate?: string;
+    bloodPressure?: string;
+    oxygenSaturation?: string;
+  };
+  symptoms?: string[];
+  timestamp: Date;
+  status: 'pending' | 'reviewed' | 'completed';
+  hasImages: boolean;
+}
+
 const DoctorDashboard: React.FC = () => {
   const [selectedCase, setSelectedCase] = useState<string | null>(null);
+  const [filterUrgency, setFilterUrgency] = useState<string>('all');
 
-  const pendingCases = [
+  const cases: CaseData[] = [
     {
       id: '1',
       patientName: 'John Doe',
       age: 45,
-      symptoms: 'Chest pain, shortness of breath',
-      priority: 'high',
-      aiRecommendation: 'Possible cardiac event. Recommend immediate consultation.',
-      timestamp: '2 hours ago',
-      vitals: { bp: '140/90', hr: '95', temp: '99.2°F' }
+      mrn: 'MRN001',
+      summary: 'Chest pain with elevated heart rate and blood pressure',
+      urgency: 'critical',
+      aiAnalysis: 'Patient presents with chest pain and elevated vital signs. Heart rate of 110 bpm and blood pressure of 150/95 suggest possible cardiac event. Immediate medical attention recommended. Consider ECG and cardiac enzymes.',
+      vitals: { heartRate: '110', bloodPressure: '150/95', oxygenSaturation: '96' },
+      symptoms: ['Chest pain', 'Shortness of breath', 'Sweating'],
+      timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
+      status: 'pending',
+      hasImages: false
     },
     {
       id: '2',
       patientName: 'Jane Smith',
       age: 32,
-      symptoms: 'Persistent headache, nausea',
-      priority: 'medium',
-      aiRecommendation: 'Possible migraine or tension headache. Monitor symptoms.',
-      timestamp: '4 hours ago',
-      vitals: { bp: '120/80', hr: '72', temp: '98.6°F' }
+      mrn: 'MRN002',
+      summary: 'Persistent headache with normal vitals',
+      urgency: 'medium',
+      aiAnalysis: 'Patient reports persistent headache for 3 days. Vital signs are within normal limits. Blood pressure 120/80, heart rate 75 bpm. Possible tension headache or migraine. Monitor symptoms and consider pain management.',
+      vitals: { heartRate: '75', bloodPressure: '120/80', oxygenSaturation: '99' },
+      symptoms: ['Headache', 'Light sensitivity', 'Nausea'],
+      timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000),
+      status: 'pending',
+      hasImages: true
     },
     {
       id: '3',
       patientName: 'Robert Johnson',
       age: 67,
-      symptoms: 'Fatigue, joint pain',
-      priority: 'low',
-      aiRecommendation: 'Possible arthritis flare-up. Routine consultation recommended.',
-      timestamp: '6 hours ago',
-      vitals: { bp: '130/85', hr: '68', temp: '98.4°F' }
+      mrn: 'MRN003',
+      summary: 'Joint pain and fatigue with stable vitals',
+      urgency: 'low',
+      aiAnalysis: 'Elderly patient with joint pain and fatigue. Vital signs stable - heart rate 68 bpm, blood pressure 130/85. Symptoms consistent with arthritis or age-related joint issues. Recommend routine follow-up and pain management evaluation.',
+      vitals: { heartRate: '68', bloodPressure: '130/85', oxygenSaturation: '98' },
+      symptoms: ['Joint pain', 'Fatigue', 'Morning stiffness'],
+      timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000),
+      status: 'reviewed',
+      hasImages: true
+    },
+    {
+      id: '4',
+      patientName: 'Maria Garcia',
+      age: 28,
+      mrn: 'MRN004',
+      summary: 'Skin rash with photos uploaded',
+      urgency: 'medium',
+      aiAnalysis: 'Patient presents with skin rash documented in uploaded photos. Vital signs normal. Rash appears to be localized with no systemic symptoms. Possible allergic reaction or contact dermatitis. Consider antihistamines and topical treatment.',
+      vitals: { heartRate: '72', bloodPressure: '115/75', oxygenSaturation: '99' },
+      symptoms: ['Skin rash', 'Itching', 'Redness'],
+      timestamp: new Date(Date.now() - 8 * 60 * 60 * 1000),
+      status: 'pending',
+      hasImages: true
+    },
+    {
+      id: '5',
+      patientName: 'David Wilson',
+      age: 55,
+      mrn: 'MRN005',
+      summary: 'Respiratory symptoms with low oxygen saturation',
+      urgency: 'high',
+      aiAnalysis: 'Patient reports cough and shortness of breath. Oxygen saturation at 94% is concerning. Heart rate elevated at 95 bpm. Possible respiratory infection or exacerbation of underlying condition. Recommend immediate evaluation and possible oxygen therapy.',
+      vitals: { heartRate: '95', bloodPressure: '140/88', oxygenSaturation: '94' },
+      symptoms: ['Cough', 'Shortness of breath', 'Fatigue'],
+      timestamp: new Date(Date.now() - 1 * 60 * 60 * 1000),
+      status: 'pending',
+      hasImages: false
     }
   ];
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
+  const getUrgencyColor = (urgency: string) => {
+    switch (urgency) {
+      case 'critical': return 'text-red-700 bg-red-100 border-red-300';
       case 'high': return 'text-red-600 bg-red-50 border-red-200';
       case 'medium': return 'text-yellow-600 bg-yellow-50 border-yellow-200';
       case 'low': return 'text-green-600 bg-green-50 border-green-200';
@@ -48,9 +109,35 @@ const DoctorDashboard: React.FC = () => {
     }
   };
 
-  const startVideoConsultation = (caseId: string) => {
-    // In a real app, this would integrate with Tavus for video avatar
-    alert(`Starting video consultation for case ${caseId}. Tavus avatar will be initialized.`);
+  const getUrgencyIcon = (urgency: string) => {
+    switch (urgency) {
+      case 'critical':
+      case 'high':
+        return <AlertTriangle className="w-4 h-4" />;
+      case 'medium':
+        return <Clock className="w-4 h-4" />;
+      case 'low':
+        return <CheckCircle className="w-4 h-4" />;
+      default:
+        return <Clock className="w-4 h-4" />;
+    }
+  };
+
+  const filteredCases = filterUrgency === 'all' 
+    ? cases 
+    : cases.filter(case_ => case_.urgency === filterUrgency);
+
+  const handleReviewCase = (caseId: string) => {
+    setSelectedCase(caseId);
+  };
+
+  const selectedCaseData = cases.find(case_ => case_.id === selectedCase);
+
+  const urgencyCounts = {
+    critical: cases.filter(c => c.urgency === 'critical').length,
+    high: cases.filter(c => c.urgency === 'high').length,
+    medium: cases.filter(c => c.urgency === 'medium').length,
+    low: cases.filter(c => c.urgency === 'low').length,
   };
 
   return (
@@ -68,37 +155,37 @@ const DoctorDashboard: React.FC = () => {
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Pending Cases</p>
-                <p className="text-2xl font-bold text-gray-900">12</p>
+                <p className="text-sm text-gray-600">Critical Cases</p>
+                <p className="text-2xl font-bold text-red-600">{urgencyCounts.critical}</p>
               </div>
-              <Clock className="w-8 h-8 text-medical-500" />
+              <AlertTriangle className="w-8 h-8 text-red-500" />
             </div>
           </div>
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Active Consultations</p>
-                <p className="text-2xl font-bold text-gray-900">3</p>
+                <p className="text-sm text-gray-600">High Priority</p>
+                <p className="text-2xl font-bold text-orange-600">{urgencyCounts.high}</p>
               </div>
-              <Video className="w-8 h-8 text-health-500" />
+              <AlertTriangle className="w-8 h-8 text-orange-500" />
             </div>
           </div>
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Completed Today</p>
-                <p className="text-2xl font-bold text-gray-900">8</p>
+                <p className="text-sm text-gray-600">Medium Priority</p>
+                <p className="text-2xl font-bold text-yellow-600">{urgencyCounts.medium}</p>
+              </div>
+              <Clock className="w-8 h-8 text-yellow-500" />
+            </div>
+          </div>
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Low Priority</p>
+                <p className="text-2xl font-bold text-green-600">{urgencyCounts.low}</p>
               </div>
               <CheckCircle className="w-8 h-8 text-green-500" />
-            </div>
-          </div>
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Total Patients</p>
-                <p className="text-2xl font-bold text-gray-900">156</p>
-              </div>
-              <Users className="w-8 h-8 text-medical-500" />
             </div>
           </div>
         </div>
@@ -108,14 +195,27 @@ const DoctorDashboard: React.FC = () => {
           <div className="lg:col-span-2">
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200">
               <div className="p-6 border-b border-gray-200">
-                <h2 className="text-xl font-semibold text-gray-900 flex items-center">
-                  <FileText className="w-5 h-5 mr-2 text-medical-500" />
-                  Pending Cases
-                </h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+                    <FileText className="w-5 h-5 mr-2 text-medical-500" />
+                    AI-Reviewed Cases
+                  </h2>
+                  <select
+                    value={filterUrgency}
+                    onChange={(e) => setFilterUrgency(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-medical-500"
+                  >
+                    <option value="all">All Cases</option>
+                    <option value="critical">Critical</option>
+                    <option value="high">High Priority</option>
+                    <option value="medium">Medium Priority</option>
+                    <option value="low">Low Priority</option>
+                  </select>
+                </div>
               </div>
               
-              <div className="divide-y divide-gray-200">
-                {pendingCases.map((case_) => (
+              <div className="divide-y divide-gray-200 max-h-[600px] overflow-y-auto">
+                {filteredCases.map((case_) => (
                   <div
                     key={case_.id}
                     className={`p-6 hover:bg-gray-50 cursor-pointer transition-colors ${
@@ -124,53 +224,60 @@ const DoctorDashboard: React.FC = () => {
                     onClick={() => setSelectedCase(case_.id)}
                   >
                     <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900">
-                          {case_.patientName}
-                        </h3>
-                        <p className="text-sm text-gray-600">Age: {case_.age} • {case_.timestamp}</p>
-                      </div>
-                      <span className={`px-3 py-1 text-xs font-medium rounded-full border ${getPriorityColor(case_.priority)}`}>
-                        {case_.priority.toUpperCase()}
-                      </span>
-                    </div>
-                    
-                    <div className="mb-3">
-                      <p className="text-sm text-gray-700 mb-2">
-                        <strong>Symptoms:</strong> {case_.symptoms}
-                      </p>
-                      <div className="flex space-x-4 text-xs text-gray-600">
-                        <span>BP: {case_.vitals.bp}</span>
-                        <span>HR: {case_.vitals.hr}</span>
-                        <span>Temp: {case_.vitals.temp}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-                      <div className="flex items-start">
-                        <AlertCircle className="w-4 h-4 text-blue-600 mt-0.5 mr-2 flex-shrink-0" />
-                        <div>
-                          <p className="text-xs font-medium text-blue-800 mb-1">AI Recommendation</p>
-                          <p className="text-sm text-blue-700">{case_.aiRecommendation}</p>
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-3 mb-2">
+                          <h3 className="text-lg font-semibold text-gray-900">
+                            {case_.patientName}
+                          </h3>
+                          <span className={`px-2 py-1 text-xs font-medium rounded-full border flex items-center space-x-1 ${getUrgencyColor(case_.urgency)}`}>
+                            {getUrgencyIcon(case_.urgency)}
+                            <span>{case_.urgency.toUpperCase()}</span>
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-600 mb-1">
+                          Age: {case_.age} • MRN: {case_.mrn} • {case_.timestamp.toLocaleString()}
+                        </p>
+                        <p className="text-sm text-gray-700 mb-3">{case_.summary}</p>
+                        
+                        {case_.vitals && (
+                          <div className="flex space-x-4 text-xs text-gray-600 mb-3">
+                            {case_.vitals.heartRate && <span>HR: {case_.vitals.heartRate} bpm</span>}
+                            {case_.vitals.bloodPressure && <span>BP: {case_.vitals.bloodPressure}</span>}
+                            {case_.vitals.oxygenSaturation && <span>O2: {case_.vitals.oxygenSaturation}%</span>}
+                          </div>
+                        )}
+                        
+                        <div className="flex items-center space-x-4">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleReviewCase(case_.id);
+                            }}
+                            className="flex items-center px-3 py-2 bg-medical-500 hover:bg-medical-600 text-white text-sm font-medium rounded-lg transition-colors"
+                          >
+                            <Eye className="w-4 h-4 mr-1" />
+                            Review Case
+                          </button>
+                          
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              alert(`Starting video consultation with ${case_.patientName}`);
+                            }}
+                            className="flex items-center px-3 py-2 bg-health-500 hover:bg-health-600 text-white text-sm font-medium rounded-lg transition-colors"
+                          >
+                            <Video className="w-4 h-4 mr-1" />
+                            Video Call
+                          </button>
+                          
+                          {case_.hasImages && (
+                            <span className="flex items-center text-xs text-blue-600">
+                              <FileText className="w-3 h-3 mr-1" />
+                              Has Images
+                            </span>
+                          )}
                         </div>
                       </div>
-                    </div>
-                    
-                    <div className="flex space-x-3">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          startVideoConsultation(case_.id);
-                        }}
-                        className="flex items-center px-4 py-2 bg-medical-500 hover:bg-medical-600 text-white text-sm font-medium rounded-lg transition-colors"
-                      >
-                        <Video className="w-4 h-4 mr-2" />
-                        Start Video Call
-                      </button>
-                      <button className="flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition-colors">
-                        <FileText className="w-4 h-4 mr-2" />
-                        View Details
-                      </button>
                     </div>
                   </div>
                 ))}
@@ -178,76 +285,101 @@ const DoctorDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Sidebar */}
+          {/* Case Details Sidebar */}
           <div className="space-y-6">
-            {/* Today's Schedule */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <Calendar className="w-5 h-5 mr-2 text-medical-500" />
-                Today's Schedule
-              </h3>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between p-3 bg-medical-50 rounded-lg">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">Video Consultation</p>
-                    <p className="text-xs text-gray-600">Sarah Wilson</p>
+            {selectedCaseData ? (
+              <>
+                {/* Selected Case Details */}
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <User className="w-5 h-5 mr-2 text-medical-500" />
+                    Case Details
+                  </h3>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">Patient</p>
+                      <p className="text-lg text-gray-900">{selectedCaseData.patientName}</p>
+                      <p className="text-sm text-gray-600">Age: {selectedCaseData.age} • MRN: {selectedCaseData.mrn}</p>
+                    </div>
+                    
+                    <div>
+                      <p className="text-sm font-medium text-gray-700 mb-2">Symptoms</p>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedCaseData.symptoms?.map((symptom, index) => (
+                          <span key={index} className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">
+                            {symptom}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    {selectedCaseData.vitals && (
+                      <div>
+                        <p className="text-sm font-medium text-gray-700 mb-2">Vital Signs</p>
+                        <div className="space-y-2">
+                          {selectedCaseData.vitals.heartRate && (
+                            <div className="flex justify-between">
+                              <span className="text-sm text-gray-600">Heart Rate:</span>
+                              <span className="text-sm font-medium">{selectedCaseData.vitals.heartRate} bpm</span>
+                            </div>
+                          )}
+                          {selectedCaseData.vitals.bloodPressure && (
+                            <div className="flex justify-between">
+                              <span className="text-sm text-gray-600">Blood Pressure:</span>
+                              <span className="text-sm font-medium">{selectedCaseData.vitals.bloodPressure}</span>
+                            </div>
+                          )}
+                          {selectedCaseData.vitals.oxygenSaturation && (
+                            <div className="flex justify-between">
+                              <span className="text-sm text-gray-600">Oxygen Saturation:</span>
+                              <span className="text-sm font-medium">{selectedCaseData.vitals.oxygenSaturation}%</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <span className="text-xs text-medical-600 font-medium">2:00 PM</span>
                 </div>
-                <div className="flex items-center justify-between p-3 bg-health-50 rounded-lg">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">Case Review</p>
-                    <p className="text-xs text-gray-600">Multiple patients</p>
-                  </div>
-                  <span className="text-xs text-health-600 font-medium">3:30 PM</span>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">Team Meeting</p>
-                    <p className="text-xs text-gray-600">Weekly sync</p>
-                  </div>
-                  <span className="text-xs text-gray-600 font-medium">5:00 PM</span>
-                </div>
-              </div>
-            </div>
 
-            {/* AI Insights */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">AI Insights</h3>
-              <div className="space-y-4">
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-sm font-medium text-red-800 mb-1">High Priority Alert</p>
-                  <p className="text-xs text-red-700">3 cases require immediate attention</p>
+                {/* AI Analysis */}
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <Activity className="w-5 h-5 mr-2 text-medical-500" />
+                    AI Analysis
+                  </h3>
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-800">{selectedCaseData.aiAnalysis}</p>
+                  </div>
                 </div>
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-sm font-medium text-blue-800 mb-1">Pattern Detected</p>
-                  <p className="text-xs text-blue-700">Increased respiratory symptoms in your area</p>
-                </div>
-                <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                  <p className="text-sm font-medium text-green-800 mb-1">Efficiency Tip</p>
-                  <p className="text-xs text-green-700">Average consultation time decreased by 15%</p>
-                </div>
-              </div>
-            </div>
 
-            {/* Quick Actions */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-              <div className="space-y-3">
-                <button className="w-full flex items-center justify-center p-3 bg-medical-500 hover:bg-medical-600 text-white rounded-lg transition-colors">
-                  <Video className="w-4 h-4 mr-2" />
-                  Start Emergency Call
-                </button>
-                <button className="w-full flex items-center justify-center p-3 bg-health-500 hover:bg-health-600 text-white rounded-lg transition-colors">
-                  <FileText className="w-4 h-4 mr-2" />
-                  Generate Report
-                </button>
-                <button className="w-full flex items-center justify-center p-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors">
-                  <Users className="w-4 h-4 mr-2" />
-                  View All Patients
-                </button>
+                {/* Quick Actions */}
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
+                  <div className="space-y-3">
+                    <button className="w-full flex items-center justify-center p-3 bg-medical-500 hover:bg-medical-600 text-white rounded-lg transition-colors">
+                      <Video className="w-4 h-4 mr-2" />
+                      Start Video Consultation
+                    </button>
+                    <button className="w-full flex items-center justify-center p-3 bg-health-500 hover:bg-health-600 text-white rounded-lg transition-colors">
+                      <FileText className="w-4 h-4 mr-2" />
+                      Add Doctor Notes
+                    </button>
+                    <button className="w-full flex items-center justify-center p-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors">
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      Mark as Reviewed
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                <div className="text-center py-8">
+                  <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500">Select a case to view details</p>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </main>
