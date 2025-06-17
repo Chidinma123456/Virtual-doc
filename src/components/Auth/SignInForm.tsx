@@ -49,23 +49,18 @@ const SignInForm: React.FC<SignInFormProps> = ({
     setIsLoading(true);
     
     try {
-      const result = await authService.signIn(data.email, data.password);
-      
-      if (result.success) {
-        if (result.mfaRequired && result.session) {
-          setMfaRequired(true, result.session);
-          onMfaRequired(result.session);
-          toast.success('Please enter your MFA code');
-        } else if (result.user) {
-          setUser(result.user);
-          toast.success(`Welcome back, ${result.user.name}!`);
-          onSuccess();
-        }
+      const user = await authService.signIn(data.email, data.password);
+      setUser(user);
+      toast.success(`Welcome back, ${user.name}!`);
+      onSuccess();
+    } catch (error: any) {
+      if (error.message === 'MFA_REQUIRED') {
+        setMfaRequired(true, 'mock_session_token');
+        onMfaRequired('mock_session_token');
+        toast.success('Please enter your MFA code');
       } else {
-        toast.error(result.error || 'Failed to sign in');
+        toast.error(error.message || 'Failed to sign in');
       }
-    } catch (error) {
-      toast.error('An unexpected error occurred');
       console.error('Sign in error:', error);
     } finally {
       setIsLoading(false);
