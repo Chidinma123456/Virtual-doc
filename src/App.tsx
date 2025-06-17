@@ -1,163 +1,195 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { UserProvider, useUser } from './context/UserContext';
-import HomePage from './pages/HomePage';
-import RoleSelection from './components/Auth/RoleSelection';
-import UnifiedAuth from './components/Auth/UnifiedAuth';
-import LoginForm from './components/Auth/LoginForm';
+import { Toaster } from 'react-hot-toast';
+import { useAuthStore } from './stores/authStore';
+import { authService } from './services/authService';
+
+// Auth Components
 import SignUpForm from './components/Auth/SignUpForm';
-import PatientPage from './pages/PatientPage';
+import SignInForm from './components/Auth/SignInForm';
+import MfaForm from './components/Auth/MfaForm';
+import EmailVerificationForm from './components/Auth/EmailVerificationForm';
+import ForgotPasswordForm from './components/Auth/ForgotPasswordForm';
+
+// Layout Components
+import DashboardLayout from './components/Layout/DashboardLayout';
+
+// Page Components
+import PatientDashboard from './pages/PatientDashboard';
 import HealthWorkerPage from './pages/HealthWorkerPage';
 import DoctorDashboard from './pages/DoctorDashboard';
-import { UserRole, User } from './types';
-import { ArrowRight } from 'lucide-react';
 
-const AppContent: React.FC = () => {
-  const { userRole, user, setUser, isLoading } = useUser();
-  const [showAuth, setShowAuth] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
-  const [authMode, setAuthMode] = useState<'login' | 'signup' | null>(null);
+const App: React.FC = () => {
+  const { user, isAuthenticated, setUser, setLoading, mfaRequired, tempCredentials } = useAuthStore();
+  const [authMode, setAuthMode] = useState<'signin' | 'signup' | 'mfa' | 'verify' | 'forgot'>('signin');
+  const [pendingEmail, setPendingEmail] = useState('');
+  const [isInitializing, setIsInitializing] = useState(true);
 
-  const handleGetStarted = () => {
-    setShowAuth(true);
-  };
+  useEffect(() => {
+    // Check for existing session on app load
+    const initializeAuth = async () => {
+      try {
+        const currentUser = await authService.getCurrentUser();
+        if (currentUser) {
+          setUser(currentUser);
+        }
+      } catch (error) {
+        console.error('Auth initialization error:', error);
+      } finally {
+        setIsInitializing(false);
+      }
+    };
 
-  const handleRoleSelect = (role: UserRole) => {
-    setSelectedRole(role);
-    setAuthMode('login'); // Default to login
-  };
+    initializeAuth();
+  }, [setUser]);
 
-  const handleLogin = (userData: User) => {
-    setUser(userData);
-    setShowAuth(false);
-    setAuthMode(null);
-    setSelectedRole(null);
-  };
-
-  const handleSignUp = (userData: User) => {
-    setUser(userData);
-    setShowAuth(false);
-    setAuthMode(null);
-    setSelectedRole(null);
-  };
-
-  const handleBackToHome = () => {
-    setShowAuth(false);
-    setAuthMode(null);
-    setSelectedRole(null);
-  };
-
-  const handleBackToRoleSelection = () => {
-    setAuthMode(null);
-    setSelectedRole(null);
-  };
-
-  const handleSwitchToSignUp = () => {
-    setAuthMode('signup');
-  };
-
-  const handleSwitchToLogin = () => {
-    setAuthMode('login');
-  };
-
-  // Show loading spinner while checking authentication
-  if (isLoading) {
+  // Show loading spinner during initialization
+  if (isInitializing) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading VirtuDoc...</p>
         </div>
       </div>
     );
   }
 
-  // If user is not authenticated, show homepage or auth flow
-  if (!user || !userRole) {
-    // Show unified auth (no role selection needed for login)
-    if (showAuth && !selectedRole) {
-      return (
-        <UnifiedAuth
-          onLogin={handleLogin}
-          onBack={handleBackToHome}
-        />
-      );
-    }
+  // Auth flow handlers
+  const handleSignUpSuccess = (email: string) => {
+    setPendingEmail(email);
+    setAuthMode('verify');
+  };
 
-    // Show role-specific auth (legacy flow for role-specific signup)
-    if (authMode && selectedRole) {
-      if (authMode === 'signup') {
-        return (
-          <SignUpForm
-            role={selectedRole}
-            onSignUp={handleSignUp}
-            onBack={handleBackToRoleSelection}
-            onSwitchToLogin={handleSwitchToLogin}
-          />
-        );
-      } else {
-        return (
-          <LoginForm
-            role={selectedRole}
-            onLogin={handleLogin}
-            onBack={handleBackToRoleSelection}
-            onSwitchToSignUp={handleSwitchToSignUp}
-          />
-        );
-      }
-    }
+  const handleSignInSuccess = () => {
+    // Navigation will be handled by the route protection
+  };
 
-    // Show role selection if coming from legacy flow
-    if (selectedRole === null && authMode) {
-      return <RoleSelection onRoleSelect={handleRoleSelect} />;
-    }
-    
-    // Show homepage with enhanced CTA
+  const handleMfaRequired = (session: string) => {
+    setAuthMode('mfa');
+  };
+
+  const handleForgotPassword = (email: string) => {
+    setPendingEmail(email);
+    setAuthMode('forgot');
+  };
+
+  const handleBackToSignIn = () => {
+    setAuthMode('signin');
+    setPendingEmail('');
+  };
+
+  // If user is authenticated, show dashboard based on role
+  if (isAuthenticated && user) {
     return (
-      <div>
-        <HomePage />
-        {/* Floating CTA Button */}
-        <div className="fixed bottom-6 right-6 z-50">
-          <button
-            onClick={handleGetStarted}
-            className="bg-gradient-to-r from-blue-600 to-green-600 text-white px-6 py-3 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center space-x-2"
-          >
-            <span className="font-semibold">Get Started</span>
-            <ArrowRight className="h-5 w-5" />
-          </button>
+      <Router>
+        <div className="min-h-screen bg-gray-50">
+          <Routes>
+            <Route path="/" element={<DashboardLayout />}>
+              <Route index element={<Navigate to={`/${user.role}`} replace />} />
+              <Route 
+                path="/patient" 
+                element={user.role === 'patient' ? <PatientDashboard /> : <Navigate to={`/${user.role}`}  />} 
+              />
+              <Route 
+                path="/healthworker" 
+                element={user.role === 'healthworker' ? <HealthWorkerPage /> : <Navigate to={`/${user.role}`} />} 
+              />
+              <Route 
+                path="/doctor" 
+                element={user.role === 'doctor' ? <DoctorDashboard /> : <Navigate to={`/${user.role}`} />} 
+              />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Route>
+          </Routes>
+          <Toaster 
+            position="top-right"
+            toastOptions={{
+              duration: 4000,
+              style: {
+                background: '#fff',
+                color: '#374151',
+                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                border: '1px solid #E5E7EB',
+                borderRadius: '0.75rem',
+              },
+            }}
+          />
         </div>
-      </div>
+      </Router>
     );
   }
 
-  // Route based on user role
-  return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Navigate to={`/${userRole}`} replace />} />
-        <Route 
-          path="/patient" 
-          element={userRole === 'patient' ? <PatientPage /> : <Navigate to={`/${userRole}`} replace />} 
+  // Show MFA form if required
+  if (mfaRequired && tempCredentials) {
+    return (
+      <>
+        <MfaForm
+          session={tempCredentials}
+          onSuccess={handleSignInSuccess}
+          onBack={handleBackToSignIn}
         />
-        <Route 
-          path="/worker" 
-          element={userRole === 'worker' ? <HealthWorkerPage /> : <Navigate to={`/${userRole}`} replace />} 
-        />
-        <Route 
-          path="/doctor" 
-          element={userRole === 'doctor' ? <DoctorDashboard /> : <Navigate to={`/${userRole}`} replace />} 
-        />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Router>
-  );
-};
+        <Toaster position="top-right" />
+      </>
+    );
+  }
 
-const App: React.FC = () => {
+  // Show appropriate auth form
+  const renderAuthForm = () => {
+    switch (authMode) {
+      case 'signup':
+        return (
+          <SignUpForm
+            onSuccess={handleSignUpSuccess}
+            onSwitchToSignIn={() => setAuthMode('signin')}
+          />
+        );
+      case 'verify':
+        return (
+          <EmailVerificationForm
+            email={pendingEmail}
+            onSuccess={handleSignInSuccess}
+            onBack={handleBackToSignIn}
+            onResend={() => {/* Implement resend logic */}}
+          />
+        );
+      case 'forgot':
+        return (
+          <ForgotPasswordForm
+            email={pendingEmail}
+            onSuccess={handleBackToSignIn}
+            onBack={handleBackToSignIn}
+          />
+        );
+      default:
+        return (
+          <SignInForm
+            onSuccess={handleSignInSuccess}
+            onSwitchToSignUp={() => setAuthMode('signup')}
+            onForgotPassword={handleForgotPassword}
+            onMfaRequired={handleMfaRequired}
+          />
+        );
+    }
+  };
+
   return (
-    <UserProvider>
-      <AppContent />
-    </UserProvider>
+    <>
+      {renderAuthForm()}
+      <Toaster 
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: '#fff',
+            color: '#374151',
+            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+            border: '1px solid #E5E7EB',
+            borderRadius: '0.75rem',
+          },
+        }}
+      />
+    </>
   );
 };
 
