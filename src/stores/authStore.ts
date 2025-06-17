@@ -1,58 +1,44 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { User, UserRole } from '../types';
+import { User } from '../types';
 
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   mfaRequired: boolean;
-  tempCredentials: any;
-  
-  // Actions
+  tempCredentials: string | null;
   setUser: (user: User | null) => void;
   setLoading: (loading: boolean) => void;
-  setMfaRequired: (required: boolean, tempCreds?: any) => void;
+  setMfaRequired: (required: boolean, credentials?: string) => void;
   logout: () => void;
-  updateUser: (updates: Partial<User>) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       user: null,
       isAuthenticated: false,
       isLoading: false,
       mfaRequired: false,
       tempCredentials: null,
-
       setUser: (user) => set({ 
         user, 
         isAuthenticated: !!user,
         mfaRequired: false,
         tempCredentials: null 
       }),
-
       setLoading: (isLoading) => set({ isLoading }),
-
       setMfaRequired: (mfaRequired, tempCredentials = null) => set({ 
         mfaRequired, 
         tempCredentials 
       }),
-
       logout: () => set({ 
         user: null, 
         isAuthenticated: false, 
         mfaRequired: false,
         tempCredentials: null 
       }),
-
-      updateUser: (updates) => {
-        const currentUser = get().user;
-        if (currentUser) {
-          set({ user: { ...currentUser, ...updates } });
-        }
-      },
     }),
     {
       name: 'virtudoc-auth',

@@ -1,176 +1,143 @@
-import { ApiResponse, PaginatedResponse } from '../types';
+import { Case, SymptomSession, VitalsEntry, PatientProfile } from '../types';
 
 class ApiService {
-  private baseUrl: string;
-  private defaultHeaders: HeadersInit;
+  private baseUrl = import.meta.env.VITE_API_BASE_URL || '/api';
 
-  constructor() {
-    this.baseUrl = import.meta.env.VITE_API_GATEWAY_URL || 'http://localhost:3000/api';
-    this.defaultHeaders = {
-      'Content-Type': 'application/json',
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const url = `${this.baseUrl}${endpoint}`;
+    
+    const config: RequestInit = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      ...options,
     };
-  }
 
-  private getAuthHeaders(): HeadersInit {
-    const accessToken = localStorage.getItem('accessToken');
-    return {
-      ...this.defaultHeaders,
-      ...(accessToken && { Authorization: `Bearer ${accessToken}` }),
-    };
-  }
-
-  private async handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
-    const data = await response.json();
-    
-    if (!response.ok) {
-      throw new Error(data.error?.message || `HTTP ${response.status}`);
-    }
-    
-    return data;
-  }
-
-  async get<T>(endpoint: string, params?: Record<string, any>): Promise<ApiResponse<T>> {
-    const url = new URL(`${this.baseUrl}${endpoint}`);
-    
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          url.searchParams.append(key, String(value));
-        }
-      });
+    // Add auth token if available
+    const user = localStorage.getItem('virtudoc_user');
+    if (user) {
+      const userData = JSON.parse(user);
+      config.headers = {
+        ...config.headers,
+        'Authorization': `Bearer ${userData.id}`, // Mock token
+      };
     }
 
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: this.getAuthHeaders(),
-    });
+    try {
+      const response = await fetch(url, config);
+      
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status}`);
+      }
 
-    return this.handleResponse<T>(response);
+      return await response.json();
+    } catch (error) {
+      console.error('API Request failed:', error);
+      throw error;
+    }
   }
 
-  async post<T>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+  // Symptom Sessions
+  async createSymptomSession(data: Omit<SymptomSession, 'id' | 'createdAt'>): Promise<SymptomSession> {
+    return this.request<SymptomSession>('/sessions', {
       method: 'POST',
-      headers: this.getAuthHeaders(),
-      body: data ? JSON.stringify(data) : undefined,
+      body: JSON.stringify(data),
     });
-
-    return this.handleResponse<T>(response);
   }
 
-  async put<T>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
-      method: 'PUT',
-      headers: this.getAuthHeaders(),
-      body: data ? JSON.stringify(data) : undefined,
-    });
-
-    return this.handleResponse<T>(response);
+  async getSymptomSessions(patientId?: string): Promise<SymptomSession[]> {
+    const query = patientId ? `?patientId=${patientId}` : '';
+    return this.request<SymptomSession[]>(`/sessions${query}`);
   }
 
-  async patch<T>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+  async getSymptomSession(id: string): Promise<SymptomSession> {
+    return this.request<SymptomSession>(`/sessions/${id}`);
+  }
+
+  async updateSymptomSession(id: string, data: Partial<SymptomSession>): Promise<SymptomSession> {
+    return this.request<SymptomSession>(`/sessions/${id}`, {
       method: 'PATCH',
-      headers: this.getAuthHeaders(),
-      body: data ? JSON.stringify(data) : undefined,
+      body: JSON.stringify(data),
     });
-
-    return this.handleResponse<T>(response);
   }
 
-  async delete<T>(endpoint: string): Promise<ApiResponse<T>> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
-      method: 'DELETE',
-      headers: this.getAuthHeaders(),
+  // Vitals
+  async createVitalsEntry(data: Omit<VitalsEntry, 'id' | 'createdAt'>): Promise<VitalsEntry> {
+    return this.request<VitalsEntry>('/vitals', {
+      method: 'POST',
+      body: JSON.stringify(data),
     });
-
-    return this.handleResponse<T>(response);
   }
 
-  async uploadFile(endpoint: string, file: File, additionalData?: Record<string, any>): Promise<ApiResponse<any>> {
+  async getVitalsEntries(sessionId?: string): Promise<VitalsEntry[]> {
+    const query = sessionId ? `?sessionId=${sessionId}` : '';
+    return this.request<VitalsEntry[]>(`/vitals${query}`);
+  }
+
+  // Cases
+  async getCases(filters?: { status?: string; doctorId?: string }): Promise<Case[]> {
+    const query = filters ? `?${new URLSearchParams(filters).toString()}` : '';
+    return this.request<Case[]>(`/cases${query}`);
+  }
+
+  async getCase(id: string): Promise<Case> {
+    return this.request<Case>(`/cases/${id}`);
+  }
+
+  async updateCase(id: string, data: Partial<Case>): Promise<Case> {
+    return this.request<Case>(`/cases/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Patient Profiles
+  async getPatientProfile(id: string): Promise<PatientProfile> {
+    return this.request<PatientProfile>(`/patients/${id}`);
+  }
+
+  async updatePatientProfile(id: string, data: Partial<PatientProfile>): Promise<PatientProfile> {
+    return this.request<PatientProfile>(`/patients/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // File Upload
+  async uploadFile(file: File, type: 'image' | 'audio'): Promise<{ url: string; key: string }> {
     const formData = new FormData();
     formData.append('file', file);
-    
-    if (additionalData) {
-      Object.entries(additionalData).forEach(([key, value]) => {
-        formData.append(key, String(value));
-      });
-    }
+    formData.append('type', type);
 
-    const accessToken = localStorage.getItem('accessToken');
-    const headers: HeadersInit = {};
-    if (accessToken) {
-      headers.Authorization = `Bearer ${accessToken}`;
-    }
-
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+    const response = await fetch(`${this.baseUrl}/upload`, {
       method: 'POST',
-      headers,
       body: formData,
+      headers: {
+        'Authorization': `Bearer ${JSON.parse(localStorage.getItem('virtudoc_user') || '{}').id}`,
+      },
     });
 
-    return this.handleResponse(response);
+    if (!response.ok) {
+      throw new Error('Upload failed');
+    }
+
+    return response.json();
   }
 
-  // Specific API methods
-  async createSession(data: any) {
-    return this.post('/sessions', data);
+  // AI Analysis
+  async analyzeSymptoms(text: string, images?: string[]): Promise<{ analysis: string; entities: any[] }> {
+    return this.request<{ analysis: string; entities: any[] }>('/ai/analyze-symptoms', {
+      method: 'POST',
+      body: JSON.stringify({ text, images }),
+    });
   }
 
-  async getSession(id: string) {
-    return this.get(`/sessions/${id}`);
-  }
-
-  async updateSession(id: string, data: any) {
-    return this.patch(`/sessions/${id}`, data);
-  }
-
-  async submitVitals(data: any) {
-    return this.post('/vitals', data);
-  }
-
-  async getCases(params?: { status?: string; priority?: string; page?: number; limit?: number }) {
-    return this.get('/cases', params);
-  }
-
-  async getCase(id: string) {
-    return this.get(`/cases/${id}`);
-  }
-
-  async updateCase(id: string, data: any) {
-    return this.patch(`/cases/${id}`, data);
-  }
-
-  async assignCase(id: string, doctorId: string) {
-    return this.post(`/cases/${id}/assign`, { doctorId });
-  }
-
-  async createConsultation(data: any) {
-    return this.post('/consultations', data);
-  }
-
-  async getNotifications() {
-    return this.get('/notifications');
-  }
-
-  async markNotificationRead(id: string) {
-    return this.patch(`/notifications/${id}/read`);
-  }
-
-  async analyzeSymptoms(text: string, audioUrl?: string) {
-    return this.post('/ai/analyze-symptoms', { text, audioUrl });
-  }
-
-  async analyzeImage(imageUrl: string) {
-    return this.post('/ai/analyze-image', { imageUrl });
-  }
-
-  async generateAudioResponse(text: string, voiceId?: string) {
-    return this.post('/ai/text-to-speech', { text, voiceId });
-  }
-
-  async createVideoConsultation(caseId: string) {
-    return this.post('/video/create-room', { caseId });
+  async analyzeVitals(vitals: any, images?: string[]): Promise<{ analysis: string; urgency: string }> {
+    return this.request<{ analysis: string; urgency: string }>('/ai/analyze-vitals', {
+      method: 'POST',
+      body: JSON.stringify({ vitals, images }),
+    });
   }
 }
 
