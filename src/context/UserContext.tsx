@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { UserRole, User } from '../types';
+import { database } from '../services/database';
 
 interface UserContextType {
   userRole: UserRole | null;
@@ -7,6 +8,7 @@ interface UserContextType {
   setUserRole: (role: UserRole) => void;
   setUser: (user: User) => void;
   logout: () => void;
+  isLoading: boolean;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -26,54 +28,54 @@ interface UserProviderProps {
 export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
   const [userRole, setUserRoleState] = useState<UserRole | null>(null);
   const [user, setUserState] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Initialize from database on mount
+  useEffect(() => {
+    const initializeUser = () => {
+      try {
+        const currentUser = database.getCurrentUser();
+        if (currentUser) {
+          setUserState(currentUser);
+          setUserRoleState(currentUser.role);
+        }
+      } catch (error) {
+        console.error('Error initializing user:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initializeUser();
+  }, []);
 
   const setUserRole = (role: UserRole) => {
     setUserRoleState(role);
-    // Store in localStorage for persistence
-    localStorage.setItem('userRole', role);
   };
 
   const setUser = (userData: User) => {
     setUserState(userData);
     setUserRoleState(userData.role);
-    localStorage.setItem('user', JSON.stringify(userData));
-    localStorage.setItem('userRole', userData.role);
+    // The database service already handles localStorage
   };
 
   const logout = () => {
     setUserRoleState(null);
     setUserState(null);
-    localStorage.removeItem('userRole');
-    localStorage.removeItem('user');
+    database.logout();
   };
 
-  // Initialize from localStorage on mount
-  React.useEffect(() => {
-    const storedRole = localStorage.getItem('userRole') as UserRole;
-    const storedUser = localStorage.getItem('user');
-    
-    if (storedRole) {
-      setUserRoleState(storedRole);
-    }
-    
-    if (storedUser) {
-      try {
-        const userData = JSON.parse(storedUser);
-        setUserState(userData);
-      } catch (error) {
-        console.error('Error parsing stored user data:', error);
-      }
-    }
-  }, []);
+  const value: UserContextType = {
+    userRole,
+    user,
+    setUserRole,
+    setUser,
+    logout,
+    isLoading
+  };
 
   return (
-    <UserContext.Provider value={{
-      userRole,
-      user,
-      setUserRole,
-      setUser,
-      logout
-    }}>
+    <UserContext.Provider value={value}>
       {children}
     </UserContext.Provider>
   );
