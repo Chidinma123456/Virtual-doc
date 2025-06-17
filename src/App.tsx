@@ -16,7 +16,7 @@ import DashboardLayout from './components/Layout/DashboardLayout';
 
 // Page Components
 import PatientDashboard from './pages/PatientDashboard';
-import HealthWorkerDashboard from './pages/HealthWorkerDashboard';
+import HealthWorkerPage from './pages/HealthWorkerPage';
 import DoctorDashboard from './pages/DoctorDashboard';
 
 const App: React.FC = () => {
@@ -93,7 +93,7 @@ const App: React.FC = () => {
               />
               <Route 
                 path="/healthworker" 
-                element={user.role === 'healthworker' ? <HealthWorkerDashboard /> : <Navigate to={`/${user.role}`} />} 
+                element={user.role === 'healthworker' ? <HealthWorkerPage /> : <Navigate to={`/${user.role}`} />} 
               />
               <Route 
                 path="/doctor" 
