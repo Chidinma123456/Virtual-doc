@@ -89,16 +89,12 @@ const SignUpForm: React.FC<SignUpFormProps> = ({ onSuccess, onSwitchToSignIn }) 
     setIsLoading(true);
     
     try {
-      const result = await authService.signUp(data.email, data.password, data.name, data.role);
-      
-      if (result.success) {
-        toast.success('Account created successfully! Please check your email for verification.');
-        onSuccess(data.email);
-      } else {
-        toast.error(result.error || 'Failed to create account');
-      }
+      await authService.signUp(data.email, data.password, data.name, data.role);
+      toast.success('Account created successfully! Please check your email for verification.');
+      onSuccess(data.email);
     } catch (error) {
-      toast.error('An unexpected error occurred');
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+      toast.error(errorMessage);
       console.error('Sign up error:', error);
     } finally {
       setIsLoading(false);
